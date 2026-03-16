@@ -1,0 +1,8 @@
+# Environment (never commit real API keys)
+server/.env
+
+# Dependencies
+server/node_modules/
+
+# Data
+server/data/

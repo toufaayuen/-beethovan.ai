@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>beethovan.ai - Chord Charts</title>
+    <meta name="description" content="Search any song, get chord charts. Free AI search. Save up to 10 songs; $1 for unlimited.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23E53935' width='32' height='32'/><text x='16' y='22' font-size='18' font-weight='bold' fill='white' text-anchor='middle' font-family='sans-serif'>♫</text></svg>">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="bauhaus-shapes">
+                <div class="shape shape-red"></div>
+                <div class="shape shape-blue"></div>
+                <div class="shape shape-yellow"></div>
+            </div>
+            <h1 class="logo">BEETHOVAN.AI</h1>
+            <p class="tagline">CHORD CHARTS</p>
+            <div class="header-buttons">
+                <span id="authStatus" class="auth-status"></span>
+                <button id="loginBtn" class="header-settings-btn" style="display: none;">LOG IN</button>
+                <button id="registerBtn" class="header-settings-btn" style="display: none;">REGISTER</button>
+                <button id="savedSongsBtn" class="header-settings-btn">📁 MY SAVED SONGS</button>
+                <button id="upgradeBtn" class="header-settings-btn upgrade-btn" style="display: none;">✨ UNLIMITED $1</button>
+                <button id="logoutBtn" class="header-settings-btn" style="display: none;">LOG OUT</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="search-section">
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="songInput" 
+                        class="search-input" 
+                        placeholder="Enter song name (any song in the world)..."
+                        autocomplete="off"
+                    >
+                    <button id="searchBtn" class="search-btn">SEARCH</button>
+                </div>
+                <div class="api-status" id="apiStatus">
+                    <span id="apiStatusText">Xai AI</span>
+                </div>
+            </div>
+
+            <div id="results" class="results-container">
+                <div class="welcome-message">
+                    <h2>WELCOME</h2>
+                    <p>Search for any song in the world to get chord charts</p>
+                    <p style="margin-top: 1rem; color: var(--bauhaus-blue); font-weight: 700;">
+                        💡 Register to save up to 10 songs; $1 for unlimited.
+                    </p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Saved Songs Modal -->
+        <div id="savedSongsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>MY SAVED SONGS</h2>
+                    <button class="close-btn" id="closeSavedSongs">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="savedSongsList" class="saved-songs-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>LOG IN</h2>
+                    <button class="close-btn" id="closeLogin">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="settings-info">Log in to save and sync your songs (free: up to 10; $1 for unlimited).</p>
+                    <div class="auth-form">
+                        <input type="email" id="loginEmail" class="api-key-input" placeholder="Email" autocomplete="email">
+                        <input type="password" id="loginPassword" class="api-key-input" placeholder="Password" autocomplete="current-password" style="margin-top: 0.5rem;">
+                        <p id="loginError" class="auth-error" style="display: none;"></p>
+                        <div class="modal-actions" style="margin-top: 1rem;">
+                            <button id="loginSubmitBtn" class="save-btn">LOG IN</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Register Modal -->
+        <div id="registerModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>REGISTER</h2>
+                    <button class="close-btn" id="closeRegister">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="settings-info">Create an account to save up to 10 songs for free. Upgrade to unlimited for $1 USD.</p>
+                    <div class="auth-form">
+                        <input type="email" id="registerEmail" class="api-key-input" placeholder="Email" autocomplete="email">
+                        <input type="password" id="registerPassword" class="api-key-input" placeholder="Password (min 6 characters)" autocomplete="new-password" style="margin-top: 0.5rem;">
+                        <p id="registerError" class="auth-error" style="display: none;"></p>
+                        <div class="modal-actions" style="margin-top: 1rem;">
+                            <button id="registerSubmitBtn" class="save-btn">REGISTER</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <footer class="footer">
+            <p>&copy; 2024–2026 BEETHOVAN.AI</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

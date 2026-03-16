@@ -1,0 +1,993 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Bauhaus Primary Colors */
+    --bauhaus-red: #E53935;
+    --bauhaus-blue: #1E88E5;
+    --bauhaus-yellow: #FDD835;
+    --bauhaus-black: #000000;
+    --bauhaus-white: #FFFFFF;
+    --bauhaus-gray: #F5F5F5;
+    --text-primary: #000000;
+    --text-secondary: #424242;
+}
+
+body {
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Arial', sans-serif;
+    background: var(--bauhaus-white);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header - Bauhaus Style */
+.header {
+    text-align: center;
+    padding: 4rem 0 3rem;
+    margin-bottom: 4rem;
+    position: relative;
+    border-bottom: 8px solid var(--bauhaus-black);
+}
+
+.bauhaus-shapes {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.shape {
+    width: 60px;
+    height: 60px;
+}
+
+.shape-red {
+    background: var(--bauhaus-red);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.shape-blue {
+    background: var(--bauhaus-blue);
+    border-radius: 0;
+    transform: rotate(45deg);
+}
+
+.shape-yellow {
+    background: var(--bauhaus-yellow);
+    border-radius: 50%;
+}
+
+.logo {
+    font-size: 4rem;
+    font-weight: 900;
+    color: var(--bauhaus-black);
+    margin-bottom: 0.5rem;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.tagline {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+}
+
+.header-buttons {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    display: flex;
+    gap: 1rem;
+    z-index: 10;
+}
+
+.header-settings-btn {
+    padding: 0.75rem 1.5rem;
+    background: var(--bauhaus-yellow);
+    color: var(--bauhaus-black);
+    border: 3px solid var(--bauhaus-black);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    box-shadow: 4px 4px 0 var(--bauhaus-black);
+    font-family: 'Montserrat', sans-serif;
+}
+
+.header-settings-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--bauhaus-black);
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+}
+
+.auth-status {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    align-self: center;
+    margin-right: 0.5rem;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.header-settings-btn.upgrade-btn {
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+}
+
+.header-settings-btn.upgrade-btn:hover {
+    background: var(--bauhaus-red);
+}
+
+.auth-error {
+    color: var(--bauhaus-red);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+}
+
+/* Search Section - Geometric Design */
+.search-section {
+    width: 100%;
+}
+
+.search-box {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0;
+    max-width: 800px;
+    margin: 0 auto;
+    border: 4px solid var(--bauhaus-black);
+    background: var(--bauhaus-white);
+    box-shadow: 8px 8px 0 var(--bauhaus-black);
+}
+
+.search-input {
+    padding: 1.5rem 2rem;
+    font-size: 1.2rem;
+    background: var(--bauhaus-white);
+    border: none;
+    border-right: 4px solid var(--bauhaus-black);
+    color: var(--text-primary);
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.search-input:focus {
+    background: var(--bauhaus-gray);
+}
+
+.search-input::placeholder {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.search-btn {
+    padding: 1.5rem 3rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    background: var(--bauhaus-red);
+    color: var(--bauhaus-white);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.search-btn:hover {
+    background: var(--bauhaus-blue);
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 var(--bauhaus-black);
+}
+
+.search-btn:active {
+    transform: translate(0, 0);
+    box-shadow: none;
+}
+
+/* Results Container */
+.results-container {
+    width: 100%;
+    min-height: 400px;
+}
+
+.welcome-message {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-secondary);
+}
+
+.welcome-message h2 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--bauhaus-black);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+}
+
+.welcome-message p {
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+/* Chord Chart Display - Bauhaus Grid */
+.chord-chart {
+    background: var(--bauhaus-white);
+    border: 4px solid var(--bauhaus-black);
+    padding: 3rem;
+    margin-bottom: 2rem;
+    box-shadow: 8px 8px 0 var(--bauhaus-black);
+    animation: slideIn 0.4s ease;
+    position: relative;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.chart-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.transpose-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bauhaus-gray);
+    padding: 0.35rem 0.5rem;
+    border: 2px solid var(--bauhaus-black);
+    border-radius: 0;
+}
+
+.transpose-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-right: 0.25rem;
+}
+
+.transpose-btn {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    background: var(--bauhaus-yellow);
+    color: var(--bauhaus-black);
+    border: 2px solid var(--bauhaus-black);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.transpose-btn:hover {
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+    transform: translate(-1px, -1px);
+}
+
+.transpose-value {
+    min-width: 3rem;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.save-song-btn.copy-btn,
+.save-song-btn.regenerate-btn,
+.save-song-btn.report-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
+.save-song-btn.copy-btn {
+    background: var(--bauhaus-gray);
+    color: var(--bauhaus-black);
+}
+
+.save-song-btn.copy-btn:hover {
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+}
+
+.save-song-btn.regenerate-btn {
+    background: var(--bauhaus-yellow);
+    color: var(--bauhaus-black);
+}
+
+.save-song-btn.regenerate-btn:hover,
+.save-song-btn.report-btn:hover {
+    background: var(--bauhaus-red);
+    color: var(--bauhaus-white);
+}
+
+.save-song-btn {
+    padding: 0.75rem 1.5rem;
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+    border: 3px solid var(--bauhaus-black);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    box-shadow: 3px 3px 0 var(--bauhaus-black);
+    font-family: 'Montserrat', sans-serif;
+}
+
+.save-song-btn:hover:not(:disabled) {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--bauhaus-black);
+}
+
+.save-song-btn:disabled {
+    background: var(--bauhaus-gray);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.song-title {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--bauhaus-black);
+    margin-bottom: 0.5rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    line-height: 1.2;
+}
+
+.song-artist {
+    font-size: 1.4rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 3rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.chord-progression {
+    background: var(--bauhaus-gray);
+    border: 3px solid var(--bauhaus-black);
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.progression-label {
+    font-size: 0.9rem;
+    color: var(--bauhaus-black);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: var(--bauhaus-yellow);
+    border: 2px solid var(--bauhaus-black);
+}
+
+.chords-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 1rem;
+    align-items: center;
+}
+
+.chord-box {
+    background: var(--bauhaus-red);
+    color: var(--bauhaus-white);
+    padding: 2rem 1.5rem;
+    border: 3px solid var(--bauhaus-black);
+    font-size: 2rem;
+    font-weight: 800;
+    text-align: center;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 4px 4px 0 var(--bauhaus-black);
+    cursor: pointer;
+}
+
+.chord-box:nth-child(2n) {
+    background: var(--bauhaus-blue);
+}
+
+.chord-box:nth-child(3n) {
+    background: var(--bauhaus-yellow);
+    color: var(--bauhaus-black);
+}
+
+.chord-box:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--bauhaus-black);
+}
+
+.chord-box.active {
+    background: var(--bauhaus-black);
+    color: var(--bauhaus-white);
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--bauhaus-black);
+}
+
+/* Chord-over-lyric layout (Ultimate Guitar style) */
+.chord-lyric-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0 0.5rem;
+    line-height: 2.2;
+    font-size: 1.1rem;
+}
+
+.chord-lyric-pair {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    vertical-align: bottom;
+}
+
+.chord-above {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--bauhaus-blue);
+    padding-bottom: 0.15rem;
+    font-family: 'Montserrat', monospace;
+}
+
+.lyric-below {
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: pre;
+}
+
+.lyrics-section {
+    margin-top: 3rem;
+    padding-top: 3rem;
+    border-top: 3px solid var(--bauhaus-black);
+}
+
+.lyrics-text {
+    font-size: 1.2rem;
+    line-height: 2;
+    color: var(--text-primary);
+    white-space: pre-line;
+    text-align: left;
+    font-weight: 500;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Error Message - Bauhaus Style */
+.error-message {
+    background: var(--bauhaus-white);
+    border: 4px solid var(--bauhaus-black);
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-primary);
+    animation: slideIn 0.4s ease;
+    box-shadow: 8px 8px 0 var(--bauhaus-black);
+}
+
+.error-message h3 {
+    color: var(--bauhaus-red);
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.error-message p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+/* Loading State */
+.loading {
+    text-align: center;
+    padding: 4rem;
+    color: var(--bauhaus-black);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.loading::after {
+    content: '...';
+    animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
+}
+
+/* API Status */
+.api-status {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* AI Badge */
+.ai-badge {
+    display: inline-block;
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--bauhaus-black);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 1rem;
+    box-shadow: 2px 2px 0 var(--bauhaus-black);
+}
+
+/* Verified reference badge */
+.verified-badge {
+    display: inline-block;
+    background: var(--bauhaus-yellow);
+    color: var(--bauhaus-black);
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--bauhaus-black);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 1rem;
+    box-shadow: 2px 2px 0 var(--bauhaus-black);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bauhaus-white);
+    border: 4px solid var(--bauhaus-black);
+    padding: 0;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 12px 12px 0 var(--bauhaus-black);
+}
+
+.modal-header {
+    background: var(--bauhaus-red);
+    color: var(--bauhaus-white);
+    padding: 2rem;
+    border-bottom: 4px solid var(--bauhaus-black);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: var(--bauhaus-white);
+    font-size: 2.5rem;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    transition: transform 0.2s;
+}
+
+.close-btn:hover {
+    transform: rotate(90deg);
+}
+
+.modal-body {
+    padding: 2rem;
+}
+
+.settings-info {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.api-option {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    border: 3px solid var(--bauhaus-black);
+    background: var(--bauhaus-gray);
+}
+
+.api-option label {
+    display: block;
+    margin-bottom: 1rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--bauhaus-black);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.api-option input[type="radio"] {
+    margin-right: 0.5rem;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.api-key-input {
+    width: 100%;
+    padding: 1rem;
+    border: 3px solid var(--bauhaus-black);
+    background: var(--bauhaus-white);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.api-key-input:focus {
+    outline: none;
+    background: var(--bauhaus-yellow);
+    border-color: var(--bauhaus-blue);
+}
+
+.api-status-display {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: var(--bauhaus-gray);
+    border: 3px solid var(--bauhaus-black);
+}
+
+.api-status-display p {
+    margin-bottom: 1rem;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.test-btn {
+    padding: 0.75rem 1.5rem;
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+    border: 3px solid var(--bauhaus-black);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    box-shadow: 3px 3px 0 var(--bauhaus-black);
+    font-family: 'Montserrat', sans-serif;
+}
+
+.test-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--bauhaus-black);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: flex-end;
+}
+
+.save-btn, .cancel-btn {
+    padding: 1rem 2rem;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border: 3px solid var(--bauhaus-black);
+    transition: all 0.2s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.save-btn {
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+    box-shadow: 4px 4px 0 var(--bauhaus-black);
+}
+
+.save-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--bauhaus-black);
+}
+
+.cancel-btn {
+    background: var(--bauhaus-white);
+    color: var(--bauhaus-black);
+    box-shadow: 4px 4px 0 var(--bauhaus-black);
+}
+
+.cancel-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--bauhaus-black);
+}
+
+.saved-songs-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.saved-song-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    background: var(--bauhaus-gray);
+    border: 3px solid var(--bauhaus-black);
+    margin-bottom: 1rem;
+}
+
+.saved-song-info h3 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--bauhaus-black);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+}
+
+.saved-song-info p {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.saved-song-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.load-song-btn, .delete-song-btn {
+    padding: 0.75rem 1.5rem;
+    border: 3px solid var(--bauhaus-black);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.load-song-btn {
+    background: var(--bauhaus-blue);
+    color: var(--bauhaus-white);
+    box-shadow: 3px 3px 0 var(--bauhaus-black);
+}
+
+.load-song-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--bauhaus-black);
+}
+
+.delete-song-btn {
+    background: var(--bauhaus-red);
+    color: var(--bauhaus-white);
+    box-shadow: 3px 3px 0 var(--bauhaus-black);
+}
+
+.delete-song-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--bauhaus-black);
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 2rem 0;
+    margin-top: 4rem;
+    border-top: 4px solid var(--bauhaus-black);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+
+    .header-buttons {
+        position: static;
+        margin-top: 1rem;
+        flex-direction: column;
+        width: 100%;
+        align-items: center;
+    }
+
+    .header-settings-btn {
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .logo {
+        font-size: 2.5rem;
+        letter-spacing: 4px;
+    }
+
+    .tagline {
+        font-size: 0.8rem;
+        letter-spacing: 2px;
+    }
+
+    .bauhaus-shapes {
+        gap: 0.5rem;
+    }
+
+    .shape {
+        width: 40px;
+        height: 40px;
+    }
+
+    .search-box {
+        grid-template-columns: 1fr;
+        border: 3px solid var(--bauhaus-black);
+    }
+
+    .search-input {
+        border-right: none;
+        border-bottom: 3px solid var(--bauhaus-black);
+    }
+
+    .search-btn {
+        width: 100%;
+    }
+
+    .song-title {
+        font-size: 2rem;
+        letter-spacing: 2px;
+    }
+
+    .chord-box {
+        font-size: 1.5rem;
+        padding: 1.5rem 1rem;
+    }
+
+    .chords-row {
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .chord-chart {
+        padding: 2rem 1.5rem;
+        border: 3px solid var(--bauhaus-black);
+    }
+
+    .modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+
+    .modal-header {
+        padding: 1.5rem;
+    }
+
+    .modal-header h2 {
+        font-size: 1.5rem;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+    }
+
+    .chart-header {
+        flex-direction: column;
+    }
+
+    .save-song-btn {
+        width: 100%;
+    }
+
+    .saved-song-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .saved-song-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .load-song-btn, .delete-song-btn {
+        width: 100%;
+    }
+}
