@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>beethovan.ai - Chord Charts</title>
-    <meta name="description" content="Search any song, get chord charts. Free AI search. Save up to 10 songs; $1 for unlimited.">
+    <meta name="description" content="Search any song, get chord charts. Free AI search. Save up to 10 songs; $1/month or $10/year for unlimited.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23E53935' width='32' height='32'/><text x='16' y='22' font-size='18' font-weight='bold' fill='white' text-anchor='middle' font-family='sans-serif'>♫</text></svg>">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,7 +26,7 @@
                 <button id="loginBtn" class="header-settings-btn" style="display: none;">LOG IN</button>
                 <button id="registerBtn" class="header-settings-btn" style="display: none;">REGISTER</button>
                 <button id="savedSongsBtn" class="header-settings-btn">📁 MY SAVED SONGS</button>
-                <button id="upgradeBtn" class="header-settings-btn upgrade-btn" style="display: none;">✨ UNLIMITED $1</button>
+                <button id="upgradeBtn" class="header-settings-btn upgrade-btn" style="display: none;">✨ UNLIMITED</button>
                 <button id="logoutBtn" class="header-settings-btn" style="display: none;">LOG OUT</button>
             </div>
         </header>
@@ -53,7 +53,7 @@
                     <h2>WELCOME</h2>
                     <p>Search for any song in the world to get chord charts</p>
                     <p style="margin-top: 1rem; color: var(--bauhaus-blue); font-weight: 700;">
-                        💡 Register to save up to 10 songs; $1 for unlimited.
+                        💡 Register to save up to 10 songs; $1/month or $10/year for unlimited.
                     </p>
                 </div>
             </div>
@@ -80,7 +80,7 @@
                     <button class="close-btn" id="closeLogin">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p class="settings-info">Log in to save and sync your songs (free: up to 10; $1 for unlimited).</p>
+                    <p class="settings-info">Log in to save and sync your songs (free: up to 10; $1/mo or $10/yr for unlimited).</p>
                     <div class="auth-form">
                         <input type="email" id="loginEmail" class="api-key-input" placeholder="Email" autocomplete="email">
                         <input type="password" id="loginPassword" class="api-key-input" placeholder="Password" autocomplete="current-password" style="margin-top: 0.5rem;">
@@ -101,7 +101,7 @@
                     <button class="close-btn" id="closeRegister">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p class="settings-info">Create an account to save up to 10 songs for free. Upgrade to unlimited for $1 USD.</p>
+                    <p class="settings-info">Create an account to save up to 10 songs for free. Upgrade to unlimited for $1/month or $10/year.</p>
                     <div class="auth-form">
                         <input type="email" id="registerEmail" class="api-key-input" placeholder="Email" autocomplete="email">
                         <input type="password" id="registerPassword" class="api-key-input" placeholder="Password (min 6 characters)" autocomplete="new-password" style="margin-top: 0.5rem;">
@@ -114,6 +114,27 @@
             </div>
         </div>
 
+        <!-- Upgrade Modal -->
+        <div id="upgradeModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>✨ UNLIMITED SAVES</h2>
+                    <button class="close-btn" id="closeUpgrade">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="settings-info">Save unlimited chord charts. Choose your plan:</p>
+                    <div class="upgrade-plans">
+                        <button class="upgrade-plan-btn" data-plan="monthly">
+                            <strong>$1</strong>/month
+                        </button>
+                        <button class="upgrade-plan-btn upgrade-plan-yearly" data-plan="yearly">
+                            <strong>$10</strong>/year <span class="plan-badge">Save 17%</span>
+                        </button>
+                    </div>
+                    <p id="upgradeError" class="auth-error" style="display: none;"></p>
+                </div>
+            </div>
+        </div>
 
         <footer class="footer">
             <p>&copy; 2024–2026 BEETHOVAN.AI</p>

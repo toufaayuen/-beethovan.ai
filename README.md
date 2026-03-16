@@ -1,12 +1,12 @@
 # BEETHOVAN.AI
 
-Chord charts for any song — free AI search, save up to 10 songs (free account), or **$1 USD for unlimited** saved songs.
+Chord charts for any song — free AI search, save up to 10 songs (free account), or **$1/month or $10/year** for unlimited saved songs.
 
 ## Features
 
 - **Free AI search**: No API key needed — search any song and get chord charts (server uses a shared DeepSeek key).
 - **Register**: Create an account to save songs (free: max 10).
-- **Unlimited membership**: Pay $1 USD once to save unlimited songs (Stripe).
+- **Unlimited membership**: Subscribe for $1/month or $10/year to save unlimited songs (Stripe).
 
 ## Quick start
 
@@ -28,7 +28,7 @@ Chord charts for any song — free AI search, save up to 10 songs (free account)
    Edit `server/.env`:
    - `DEEPSEEK_API_KEY` — your DeepSeek API key (for free AI search).
    - `JWT_SECRET` — use a long random string in production.
-   - Optional (for $1 upgrade): `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`.
+   - Optional (for subscription): `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_YEARLY`, `STRIPE_WEBHOOK_SECRET`.
 
 4. **Run the server**
    ```bash
@@ -43,12 +43,14 @@ Chord charts for any song — free AI search, save up to 10 songs (free account)
    <script src="script.js"></script>
    ```
 
-## Stripe ($1 unlimited)
+## Stripe (subscription: $1/mo or $10/yr)
 
 1. Create a [Stripe](https://stripe.com) account and get your **Secret key**.
-2. In Dashboard → Products → Add product: name e.g. "Unlimited Saves", one-time payment **$1 USD**. Copy the **Price ID** (`price_...`).
-3. Set in `.env`: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`.
-4. For automatic upgrade after payment: add a Webhook endpoint `https://your-domain.com/api/webhook/stripe`, event `checkout.session.completed`, and set `STRIPE_WEBHOOK_SECRET` in `.env`.
+2. In Dashboard → Products → Add two products:
+   - **Monthly**: "Unlimited Saves Monthly", recurring **$1/month**. Copy the Price ID (`price_...`).
+   - **Yearly**: "Unlimited Saves Yearly", recurring **$10/year**. Copy the Price ID.
+3. Set in `.env`: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_YEARLY`.
+4. For automatic upgrade: add a Webhook endpoint `https://your-domain.com/api/webhook/stripe`, events `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, and set `STRIPE_WEBHOOK_SECRET` in `.env`.
 
 ## Chord accuracy evaluation
 

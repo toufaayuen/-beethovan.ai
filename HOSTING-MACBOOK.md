@@ -147,13 +147,13 @@ pm2 save
 
 ---
 
-## 5. Stripe webhooks (if using $1 upgrade)
+## 5. Stripe webhooks (if using subscription)
 
-If you use Stripe for the unlimited membership:
+If you use Stripe for the unlimited membership ($1/mo or $10/yr):
 
 1. In Stripe Dashboard → Webhooks → Add endpoint
 2. URL: `https://beethovan.ai/api/webhook/stripe`
-3. Event: `checkout.session.completed`
+3. Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
 4. Copy the webhook signing secret and add to `.env` as `STRIPE_WEBHOOK_SECRET`
 
 ---

@@ -49,7 +49,7 @@ function saveSavedSongsToLocal() {
 // Add song to saved songs (requires login; free: max 10, paid: unlimited)
 async function saveSong(song) {
     if (!currentUser) {
-        alert('Please register or log in to save songs. Free: up to 10 songs; $1 for unlimited.');
+        alert('Please register or log in to save songs. Free: up to 10 songs; $1/month or $10/year for unlimited.');
         openRegister();
         return;
     }
@@ -75,7 +75,7 @@ async function saveSong(song) {
             return;
         }
         if (res.status === 403 && data.limit) {
-            alert(`You've reached the free limit of ${data.limit} songs. Upgrade to unlimited for $1 USD to save more!`);
+            alert(`You've reached the free limit of ${data.limit} songs. Upgrade to unlimited ($1/month or $10/year) to save more!`);
             document.getElementById('upgradeBtn').click();
             return;
         }
@@ -812,7 +812,7 @@ function doLogout() {
     renderSavedSongs();
 }
 
-async function doUpgrade() {
+function openUpgrade() {
     if (!currentUser) {
         openLogin();
         return;
@@ -821,20 +821,48 @@ async function doUpgrade() {
         alert('You already have unlimited saves!');
         return;
     }
+    const modal = document.getElementById('upgradeModal');
+    const errEl = document.getElementById('upgradeError');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    modal.style.display = 'flex';
+}
+
+function closeUpgrade() {
+    document.getElementById('upgradeModal').style.display = 'none';
+}
+
+async function doCheckout(plan) {
+    const errEl = document.getElementById('upgradeError');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
     try {
         const res = await fetch(API_BASE + '/api/create-checkout-session', {
             method: 'POST',
-            headers: getAuthHeader()
+            headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+            body: JSON.stringify({ plan })
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.url) {
             window.location.href = data.url;
             return;
         }
-        alert(data.error || 'Payment not configured. Set up Stripe on the server.');
+        if (errEl) {
+            errEl.textContent = data.error || 'Payment not configured. Set up Stripe on the server.';
+            errEl.style.display = 'block';
+        } else {
+            alert(data.error || 'Payment not configured. Set up Stripe on the server.');
+        }
     } catch (e) {
-        alert('Network error. Make sure the server is running.');
+        if (errEl) {
+            errEl.textContent = 'Network error. Make sure the server is running.';
+            errEl.style.display = 'block';
+        } else {
+            alert('Network error. Make sure the server is running.');
+        }
     }
+}
+
+function doUpgrade() {
+    openUpgrade();
 }
 
 // Saved Songs Modal Functions
@@ -844,7 +872,7 @@ async function openSavedSongs() {
     if (!currentUser) {
         const list = document.getElementById('savedSongsList');
         if (list) {
-            list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">Register or log in to save up to 10 songs for free. $1 for unlimited.</p>';
+            list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">Register or log in to save up to 10 songs for free. $1/month or $10/year for unlimited.</p>';
             const wrap = document.createElement('div');
             wrap.style.textAlign = 'center';
             wrap.innerHTML = '<button class="save-btn" id="savedSongsRegisterBtn" style="margin: 0.5rem;">REGISTER</button> <button class="cancel-btn" id="savedSongsLoginBtn">LOG IN</button>';
@@ -894,6 +922,10 @@ document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
 document.getElementById('registerSubmitBtn').addEventListener('click', doRegister);
 document.getElementById('logoutBtn').addEventListener('click', doLogout);
 document.getElementById('upgradeBtn').addEventListener('click', doUpgrade);
+document.getElementById('closeUpgrade').addEventListener('click', closeUpgrade);
+document.querySelectorAll('.upgrade-plan-btn').forEach(btn => {
+    btn.addEventListener('click', () => doCheckout(btn.dataset.plan));
+});
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {

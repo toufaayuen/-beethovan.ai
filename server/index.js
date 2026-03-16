@@ -145,11 +145,22 @@ function searchChordonomiconByQuery(query) {
 
 app.use(cors({ origin: true }));
 
+// Ensure user tier reflects subscription status (expired = free)
+function ensureSubscriptionTier(user) {
+  if (user.tier !== 'unlimited') return;
+  const periodEnd = user.subscriptionPeriodEnd;
+  if (periodEnd && new Date(periodEnd) < new Date()) {
+    user.tier = 'free';
+    user.subscriptionId = undefined;
+    user.subscriptionPeriodEnd = undefined;
+  }
+}
+
 // Stripe webhook must get raw body (register before express.json())
 app.post(
   '/api/webhook/stripe',
   express.raw({ type: 'application/json' }),
-  (req, res) => {
+  async (req, res) => {
     const sig = req.headers['stripe-signature'];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret || !stripe) {
@@ -164,14 +175,37 @@ app.post(
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
       const userId = session.metadata?.userId || session.client_reference_id;
-      if (userId) {
-        const store = loadStore();
-        const user = store.users.find(u => u.id === userId);
-        if (user) {
-          user.tier = 'unlimited';
-          saveStore(store);
-          console.log('User upgraded to unlimited:', user.email);
+      if (userId && session.mode === 'subscription' && session.subscription) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          const store = loadStore();
+          const user = store.users.find(u => u.id === userId);
+          if (user) {
+            user.tier = 'unlimited';
+            user.subscriptionId = subscription.id;
+            user.subscriptionPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+            saveStore(store);
+            console.log('User subscribed to unlimited:', user.email, 'until', user.subscriptionPeriodEnd);
+          }
+        } catch (e) {
+          console.error('Webhook subscription fetch error:', e);
         }
+      }
+    }
+    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object;
+      const store = loadStore();
+      const user = store.users.find(u => u.subscriptionId === sub.id);
+      if (user) {
+        if (sub.status === 'active' || sub.status === 'trialing') {
+          user.subscriptionPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
+        } else {
+          // Canceled, past_due, unpaid, etc. - access until period end
+          user.subscriptionPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
+          ensureSubscriptionTier(user);
+        }
+        saveStore(store);
+        console.log('Subscription updated for', user.email, 'period end:', user.subscriptionPeriodEnd);
       }
     }
     res.json({ received: true });
@@ -249,6 +283,12 @@ app.get('/api/me', authMiddleware, (req, res) => {
   const store = loadStore();
   const user = store.users.find(u => u.id === req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
+  ensureSubscriptionTier(user);
+  if (user.tier === 'free' && user.subscriptionId) {
+    user.subscriptionId = undefined;
+    user.subscriptionPeriodEnd = undefined;
+    saveStore(store);
+  }
   res.json({
     email: user.email,
     tier: user.tier,
@@ -268,6 +308,12 @@ app.post('/api/saved-songs', authMiddleware, (req, res) => {
   const store = loadStore();
   const user = store.users.find(u => u.id === req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
+  ensureSubscriptionTier(user);
+  if (user.tier === 'free' && user.subscriptionId) {
+    user.subscriptionId = undefined;
+    user.subscriptionPeriodEnd = undefined;
+    saveStore(store);
+  }
   const song = req.body;
   if (!song || !song.title) {
     return res.status(400).json({ error: 'Invalid song data' });
@@ -284,7 +330,7 @@ app.post('/api/saved-songs', authMiddleware, (req, res) => {
     return res.status(403).json({
       error: 'Save limit reached',
       limit: FREE_SAVE_LIMIT,
-      message: 'Upgrade to unlimited for $1 USD to save more songs.',
+      message: 'Upgrade to unlimited ($1/month or $10/year) to save more songs.',
     });
   }
   user.savedSongs.push({
@@ -602,21 +648,26 @@ Rules: 2–4 sections (Intro, Verse, Chorus, Bridge, etc.). 4–8 chords per sec
   }
 });
 
-// --- Stripe $1 unlimited ---
+// --- Stripe subscription ($1/mo or $10/yr) ---
 app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
   if (!stripe) {
     return res.status(503).json({
-      error: 'Payments not configured. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID.',
+      error: 'Payments not configured. Set STRIPE_SECRET_KEY and price IDs.',
     });
   }
-  const priceId = process.env.STRIPE_PRICE_ID;
+  const plan = (req.body?.plan || 'monthly').toLowerCase();
+  const priceId = plan === 'yearly'
+    ? process.env.STRIPE_PRICE_ID_YEARLY
+    : process.env.STRIPE_PRICE_ID_MONTHLY;
   if (!priceId) {
-    return res.status(503).json({ error: 'STRIPE_PRICE_ID not set' });
+    return res.status(503).json({
+      error: plan === 'yearly' ? 'STRIPE_PRICE_ID_YEARLY not set' : 'STRIPE_PRICE_ID_MONTHLY not set',
+    });
   }
   const origin = req.headers.origin || req.get('referer') || 'http://localhost:3000';
   try {
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
         {
