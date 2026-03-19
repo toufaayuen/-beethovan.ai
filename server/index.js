@@ -6,154 +6,44 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const Stripe = require('stripe');
+const db = require('./db');
+const { registerChordsApi } = require('./api/chords');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'beethovan-dev-secret-change-in-production';
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
 const XAI_API_KEY = process.env.XAI_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const FREE_SAVE_LIMIT = 10;
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 const DATA_DIR = path.join(__dirname, 'data');
-const STORE_FILE = path.join(DATA_DIR, 'store.json');
-const CHORD_REFERENCE_FILE = path.join(DATA_DIR, 'chord-reference.json');
-const CHORDONOMICON_INDEX_FILE = path.join(DATA_DIR, 'chordonomicon-index.json');
+const FEEDBACK_FILE = path.join(DATA_DIR, 'feedback.json');
 
-// Ensure data dir exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function loadStore() {
-  try {
-    const data = fs.readFileSync(STORE_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    return { users: [] };
-  }
-}
-
-function saveStore(store) {
-  fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
-}
-
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2);
-}
-
-// RAG: Load chord reference and search by query (title + artist)
-function loadChordReference() {
-  try {
-    if (!fs.existsSync(CHORD_REFERENCE_FILE)) return [];
-    const data = fs.readFileSync(CHORD_REFERENCE_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    return [];
-  }
-}
-
-function searchChordReference(query) {
-  const top = searchChordReferenceTopK(query, 1);
-  return top.length > 0 ? top[0] : null;
-}
-
-function searchChordReferenceTopK(query, k = 2) {
-  const refs = loadChordReference();
-  if (refs.length === 0) return [];
-  const rawQuery = (query || '').trim();
-  const q = rawQuery.toLowerCase().replace(/[^\w\s\u4e00-\u9fff\uac00-\ud7af\u3040-\u309f]/g, ' ').replace(/\s+/g, ' ').trim();
-  const qWords = q.split(' ').filter(w => w.length > 0);
-  const hasCJK = /[\u4e00-\u9fff\uac00-\ud7af\u3040-\u309f]/.test(rawQuery);
-
-  const scored = [];
-  for (const ref of refs) {
-    const title = (ref.title || '').toLowerCase();
-    const artist = (ref.artist || '').toLowerCase();
-    const aliases = (ref.aliases || []).map(a => (a || '').toLowerCase());
-    const combined = `${title} ${artist} ${aliases.join(' ')}`;
-
-    let score = 0;
-    if (hasCJK || rawQuery.length >= 2) {
-      const qNorm = rawQuery.replace(/\s+/g, '').toLowerCase();
-      const combinedNorm = (title + artist + aliases.join('')).replace(/\s+/g, '');
-      if (combinedNorm.includes(qNorm) || combined.toLowerCase().includes(qNorm)) score = Math.max(score, 0.7);
-      if (qNorm.includes(combinedNorm) || qNorm.includes(title) || qNorm.includes(artist)) score = Math.max(score, 0.6);
-    }
-    if (qWords.length > 0) {
-      const matched = qWords.filter(w => combined.includes(w)).length;
-      score = Math.max(score, matched / Math.max(1, qWords.length));
-    }
-    if (score >= 0.3) scored.push({ ref, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, k).map(s => s.ref);
-}
-
-// Chordonomicon: Load index for Spotify ID lookups (built by scripts/build_chordonomicon.py)
-function loadChordonomiconIndex() {
-  try {
-    if (!fs.existsSync(CHORDONOMICON_INDEX_FILE)) return null;
-    const data = fs.readFileSync(CHORDONOMICON_INDEX_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    return null;
-  }
-}
-
-function searchChordonomiconBySpotifyId(spotifyId) {
-  const index = loadChordonomiconIndex();
-  if (!index || !Array.isArray(index)) return null;
-  const found = index.find(s => (s.spotifyId || '').toLowerCase() === (spotifyId || '').toLowerCase());
-  return found ? { title: found.title, artist: found.artist, progressions: found.progressions } : null;
-}
-
-// Chordonomicon search by query (title + artist) - no Spotify needed
-function searchChordonomiconByQuery(query) {
-  const index = loadChordonomiconIndex();
-  if (!index || !Array.isArray(index)) return null;
-  const rawQuery = (query || '').trim();
-  const q = rawQuery.toLowerCase().replace(/[^\w\s\u4e00-\u9fff\uac00-\ud7af\u3040-\u309f]/g, ' ').replace(/\s+/g, ' ').trim();
-  const qWords = q.split(' ').filter(w => w.length > 0);
-  const hasCJK = /[\u4e00-\u9fff\uac00-\ud7af\u3040-\u309f]/.test(rawQuery);
-
-  let best = null;
-  let bestScore = 0;
-  for (const ref of index) {
-    const title = (ref.title || '').toLowerCase();
-    const artist = (ref.artist || '').toLowerCase();
-    const combined = `${title} ${artist}`;
-
-    let score = 0;
-    if (hasCJK || rawQuery.length >= 2) {
-      const qNorm = rawQuery.replace(/\s+/g, '').toLowerCase();
-      const combinedNorm = (title + artist).replace(/\s+/g, '');
-      if (combinedNorm.includes(qNorm) || combined.includes(qNorm)) score = Math.max(score, 0.7);
-      if (qNorm.includes(combinedNorm) || qNorm.includes(title) || qNorm.includes(artist)) score = Math.max(score, 0.6);
-    }
-    if (qWords.length > 0) {
-      const matched = qWords.filter(w => combined.includes(w)).length;
-      score = Math.max(score, matched / Math.max(1, qWords.length));
-    }
-    if (score >= 0.5 && score > bestScore) {
-      bestScore = score;
-      best = ref;
-    }
-  }
-  return best ? { title: best.title, artist: best.artist, progressions: best.progressions } : null;
-}
-
-app.use(cors({ origin: true }));
+// CORS: localhost (dev) + beethovan.ai (production). Add more via CORS_ORIGINS env.
+const defaultOrigins = [
+  'http://localhost:3001', 'http://127.0.0.1:3001', 'http://localhost:3000', 'http://127.0.0.1:3000',
+  'http://localhost:3009', 'http://127.0.0.1:3009',
+  'https://beethovan.ai', 'https://www.beethovan.ai', 'http://beethovan.ai', 'http://www.beethovan.ai',
+];
+const extraOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = [...defaultOrigins, ...extraOrigins];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+    else cb(null, false);
+  },
+}));
 
 // Ensure user tier reflects subscription status (expired = free)
 function ensureSubscriptionTier(user) {
-  if (user.tier !== 'unlimited') return;
+  if (user.tier !== 'unlimited') return user;
   const periodEnd = user.subscriptionPeriodEnd;
   if (periodEnd && new Date(periodEnd) < new Date()) {
-    user.tier = 'free';
-    user.subscriptionId = undefined;
-    user.subscriptionPeriodEnd = undefined;
+    db.updateUser(user.id, { tier: 'free', subscriptionId: null, subscriptionPeriodEnd: null });
+    return db.getUserById(user.id);
   }
+  return user;
 }
 
 // Stripe webhook must get raw body (register before express.json())
@@ -178,14 +68,15 @@ app.post(
       if (userId && session.mode === 'subscription' && session.subscription) {
         try {
           const subscription = await stripe.subscriptions.retrieve(session.subscription);
-          const store = loadStore();
-          const user = store.users.find(u => u.id === userId);
+          const user = db.getUserById(userId);
           if (user) {
-            user.tier = 'unlimited';
-            user.subscriptionId = subscription.id;
-            user.subscriptionPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
-            saveStore(store);
-            console.log('User subscribed to unlimited:', user.email, 'until', user.subscriptionPeriodEnd);
+            db.updateUser(userId, {
+              tier: 'unlimited',
+              subscriptionId: subscription.id,
+              subscriptionPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+            });
+            db.syncEmailList();
+            console.log('User subscribed to unlimited:', user.email, 'until', new Date(subscription.current_period_end * 1000).toISOString());
           }
         } catch (e) {
           console.error('Webhook subscription fetch error:', e);
@@ -194,18 +85,17 @@ app.post(
     }
     if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       const sub = event.data.object;
-      const store = loadStore();
-      const user = store.users.find(u => u.subscriptionId === sub.id);
-      if (user) {
-        if (sub.status === 'active' || sub.status === 'trialing') {
-          user.subscriptionPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
-        } else {
-          // Canceled, past_due, unpaid, etc. - access until period end
-          user.subscriptionPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
-          ensureSubscriptionTier(user);
+      const users = db.getDb().prepare('SELECT id FROM users WHERE subscription_id = ?').all(sub.id);
+      if (users.length > 0) {
+        const userId = users[0].id;
+        const user = db.getUserById(userId);
+        const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
+        db.updateUser(userId, { subscriptionPeriodEnd: periodEnd });
+        if (sub.status !== 'active' && sub.status !== 'trialing') {
+          ensureSubscriptionTier({ ...user, subscriptionPeriodEnd: periodEnd });
         }
-        saveStore(store);
-        console.log('Subscription updated for', user.email, 'period end:', user.subscriptionPeriodEnd);
+        db.syncEmailList();
+        console.log('Subscription updated for', user.email, 'period end:', periodEnd);
       }
     }
     res.json({ received: true });
@@ -213,6 +103,24 @@ app.post(
 );
 
 app.use(express.json());
+
+// Real Book + lead-sheet APIs (xAI); see server/api/chords.js
+registerChordsApi(app, { getXaiKey: () => XAI_API_KEY });
+
+const REALBOOK_HTML = path.resolve(__dirname, '..', 'realbook.html');
+function sendRealbookPage(req, res) {
+  res.sendFile(REALBOOK_HTML, (err) => {
+    if (err) {
+      console.error('Real Book sendFile:', err.message, REALBOOK_HTML);
+      res.status(404).type('text').send(
+        'Real Book page missing. Ensure realbook.html is next to index.html, Dropbox has synced, then restart: cd server && npm start'
+      );
+    }
+  });
+}
+// Trailing slash would break relative /realbook.css in HTML; normalize to /realbook
+app.get('/realbook/', (req, res) => res.redirect(302, '/realbook'));
+app.get('/realbook', sendRealbookPage);
 
 // Serve frontend (index.html, script.js, style.css) from parent directory
 app.use(express.static(path.join(__dirname, '..')));
@@ -239,21 +147,12 @@ app.post('/api/register', async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
   }
-  const store = loadStore();
-  if (store.users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+  if (db.getUserByEmail(email)) {
     return res.status(400).json({ error: 'Email already registered' });
   }
   const hash = await bcrypt.hash(password, 10);
-  const user = {
-    id: genId(),
-    email: email.toLowerCase(),
-    passwordHash: hash,
-    tier: 'free',
-    savedSongs: [],
-    createdAt: new Date().toISOString(),
-  };
-  store.users.push(user);
-  saveStore(store);
+  const user = db.createUser(email, hash);
+  db.syncEmailList();
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: { email: user.email, tier: user.tier, savedCount: 0 } });
 });
@@ -263,82 +162,72 @@ app.post('/api/login', async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
   }
-  const store = loadStore();
-  const user = store.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const user = db.getUserByEmail(email);
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
+  const savedSongs = db.getSavedSongs(user.id);
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
   res.json({
     token,
     user: {
       email: user.email,
       tier: user.tier,
-      savedCount: (user.savedSongs || []).length,
+      savedCount: savedSongs.length,
     },
   });
 });
 
 app.get('/api/me', authMiddleware, (req, res) => {
-  const store = loadStore();
-  const user = store.users.find(u => u.id === req.userId);
+  let user = db.getUserById(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  ensureSubscriptionTier(user);
+  user = ensureSubscriptionTier(user);
   if (user.tier === 'free' && user.subscriptionId) {
-    user.subscriptionId = undefined;
-    user.subscriptionPeriodEnd = undefined;
-    saveStore(store);
+    db.updateUser(user.id, { subscriptionId: null, subscriptionPeriodEnd: null });
+    user = db.getUserById(user.id);
   }
+  const savedCount = db.getSavedSongs(user.id).length;
   res.json({
     email: user.email,
     tier: user.tier,
-    savedCount: (user.savedSongs || []).length,
+    savedCount,
   });
 });
 
 // --- Saved songs ---
 app.get('/api/saved-songs', authMiddleware, (req, res) => {
-  const store = loadStore();
-  const user = store.users.find(u => u.id === req.userId);
+  const user = db.getUserById(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user.savedSongs || []);
+  res.json(db.getSavedSongs(user.id));
 });
 
 app.post('/api/saved-songs', authMiddleware, (req, res) => {
-  const store = loadStore();
-  const user = store.users.find(u => u.id === req.userId);
+  let user = db.getUserById(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  ensureSubscriptionTier(user);
+  user = ensureSubscriptionTier(user);
   if (user.tier === 'free' && user.subscriptionId) {
-    user.subscriptionId = undefined;
-    user.subscriptionPeriodEnd = undefined;
-    saveStore(store);
+    db.updateUser(user.id, { subscriptionId: null, subscriptionPeriodEnd: null });
+    user = db.getUserById(user.id);
   }
   const song = req.body;
   if (!song || !song.title) {
     return res.status(400).json({ error: 'Invalid song data' });
   }
-  user.savedSongs = user.savedSongs || [];
-  const exists = user.savedSongs.some(
-    s => s.title === song.title && (s.artist || '') === (song.artist || '')
-  );
-  if (exists) {
-    return res.status(400).json({ error: 'Song already saved' });
-  }
+  const savedSongs = db.getSavedSongs(user.id);
   const isUnlimited = user.tier === 'unlimited';
-  if (!isUnlimited && user.savedSongs.length >= FREE_SAVE_LIMIT) {
+  if (!isUnlimited && savedSongs.length >= FREE_SAVE_LIMIT) {
     return res.status(403).json({
       error: 'Save limit reached',
       limit: FREE_SAVE_LIMIT,
       message: 'Upgrade to unlimited ($1/month or $10/year) to save more songs.',
     });
   }
-  user.savedSongs.push({
-    ...song,
-    savedAt: new Date().toISOString(),
-  });
-  saveStore(store);
-  res.json({ saved: true, savedCount: user.savedSongs.length });
+  const result = db.addSavedSong(user.id, song);
+  if (result.exists) {
+    return res.status(400).json({ error: 'Song already saved' });
+  }
+  db.syncEmailList();
+  res.json({ saved: true, savedCount: result.count });
 });
 
 app.delete('/api/saved-songs/:index', authMiddleware, (req, res) => {
@@ -346,305 +235,235 @@ app.delete('/api/saved-songs/:index', authMiddleware, (req, res) => {
   if (Number.isNaN(index) || index < 0) {
     return res.status(400).json({ error: 'Invalid index' });
   }
-  const store = loadStore();
-  const user = store.users.find(u => u.id === req.userId);
+  const user = db.getUserById(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  user.savedSongs = user.savedSongs || [];
-  if (index >= user.savedSongs.length) {
-    return res.status(404).json({ error: 'Song not found' });
-  }
-  user.savedSongs.splice(index, 1);
-  saveStore(store);
-  res.json({ removed: true, savedCount: user.savedSongs.length });
+  const ok = db.removeSavedSongByIndex(user.id, index);
+  if (!ok) return res.status(404).json({ error: 'Song not found' });
+  db.syncEmailList();
+  const savedCount = db.getSavedSongs(user.id).length;
+  res.json({ removed: true, savedCount });
 });
 
-// --- Chord feedback (store user corrections) ---
-const CHORD_FEEDBACK_FILE = path.join(DATA_DIR, 'chord-feedback.json');
-
-app.post('/api/chord-feedback', (req, res) => {
-  const body = req.body || {};
-  const { title, artist, progressions, correctedText } = body;
-  if (!title || typeof title !== 'string') {
-    return res.status(400).json({ error: 'title required' });
-  }
+// --- Feedback (Report inaccurate) ---
+function loadFeedback() {
   try {
-    let feedback = [];
-    if (fs.existsSync(CHORD_FEEDBACK_FILE)) {
-      feedback = JSON.parse(fs.readFileSync(CHORD_FEEDBACK_FILE, 'utf8'));
-    }
-    feedback.push({
-      title,
-      artist: artist || '',
-      progressions: progressions || [],
-      correctedText: correctedText || null,
-      reportedAt: new Date().toISOString()
-    });
-    fs.writeFileSync(CHORD_FEEDBACK_FILE, JSON.stringify(feedback, null, 2), 'utf8');
-    res.json({ ok: true });
+    const data = fs.readFileSync(FEEDBACK_FILE, 'utf8');
+    return JSON.parse(data);
   } catch (e) {
-    console.error('Chord feedback error:', e);
-    res.status(500).json({ error: 'Failed to save feedback' });
+    return [];
   }
+}
+
+function saveFeedback(arr) {
+  fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(arr, null, 2), 'utf8');
+}
+
+app.post('/api/feedback', (req, res) => {
+  const { title, artist, originalProgressions, correctedProgressions, note } = req.body || {};
+  if (!title || !note || typeof note !== 'string' || !note.trim()) {
+    return res.status(400).json({ error: 'title and note (description of what\'s wrong) required' });
+  }
+  const feedback = loadFeedback();
+  feedback.push({
+    title,
+    artist: artist || 'Unknown',
+    originalProgressions: originalProgressions || [],
+    correctedProgressions: Array.isArray(correctedProgressions) ? correctedProgressions : null,
+    note: note.trim(),
+    reportedAt: new Date().toISOString(),
+  });
+  saveFeedback(feedback);
+  res.json({ ok: true, message: 'Thank you for the correction!' });
 });
 
-// --- RAG: Chord lookup (for client to use with Xai) ---
-// Priority: 1) Chordonomicon by Spotify ID, 2) Chordonomicon by query, 3) chord-reference
-app.get('/api/chord-lookup', (req, res) => {
-  const q = req.query.q;
-  const spotifyId = req.query.spotifyId;
-
-  // 1. Try Chordonomicon by Spotify ID if present
-  if (spotifyId && typeof spotifyId === 'string') {
-    const chordonomicon = searchChordonomiconBySpotifyId(spotifyId);
-    if (chordonomicon) {
-      return res.json({ found: true, song: chordonomicon, source: 'chordonomicon' });
-    }
-  }
-
-  if (!q || typeof q !== 'string') {
-    return res.status(400).json({ error: 'Query parameter q required' });
-  }
-
-  // 2. Try Chordonomicon by title/artist (no Spotify needed)
-  const chordonomiconByQuery = searchChordonomiconByQuery(q);
-  if (chordonomiconByQuery) {
-    return res.json({ found: true, song: chordonomiconByQuery, source: 'chordonomicon' });
-  }
-
-  // 3. Fall back to chord-reference
-  const ref = searchChordReference(q);
-  if (ref) {
-    return res.json({ found: true, song: ref, source: 'chord-reference' });
-  }
-  // No match: return top-k suggestions for RAG context
-  const suggestions = searchChordReferenceTopK(q, 2);
-  res.json({ found: false, suggestions });
-});
-
-// --- Xai AI proxy (avoids CORS - browser cannot call api.x.ai directly) ---
-app.post('/api/generate-chord-chart-xai', async (req, res) => {
-  if (!XAI_API_KEY) {
-    return res.status(503).json({
-      error: 'Xai AI is not configured. Set XAI_API_KEY in server/.env',
-    });
-  }
-  const { songQuery, ragContext } = req.body || {};
-  if (!songQuery || typeof songQuery !== 'string') {
-    return res.status(400).json({ error: 'songQuery required' });
-  }
-
-  const systemPrompt = `You are an expert at guitar and piano chord charts. Your goal is accuracy.
+// --- Chord generation (unified: Xai, Groq) ---
+const CHORD_SYSTEM_PROMPT = `You are an expert at guitar and piano chord charts. Your goal is accuracy.
 - NEVER invent chord progressions. Only return progressions you have high confidence in from real transcriptions (official tabs, chord sheets, or widely accepted versions).
 - When uncertain, prefer returning fewer sections rather than inventing chords. Do NOT guess for obscure or lesser-known songs.
 - Give the real chord progression used in the actual song (as heard on the record or in common tabs).
 - Use the correct key (e.g. capo = write in concert key, or state key and use common chord shapes).
 - Use standard notation: C, Dm, Em, F, G, Am, Bdim, C7, F#m, Bb, etc. Include sharps/flats when needed.
+- Use exact sus4, sus2, 7sus4 when the song uses them (e.g. Wonderwall uses Dsus4 and A7sus4, not plain D and A).
 - Match the song structure: Verse, Chorus, Bridge, Intro, Outro. Repeat the same progression for the same section (e.g. Verse 1 and Verse 2 share the same chords).
 - If the song uses a well-known progression (e.g. I-V-vi-IV, I-vi-IV-V), use that. Do not invent progressions—prefer the standard one for that song.
 - Support songs in ANY language: English, Cantonese, Mandarin, Korean, Japanese, etc. Use the original title and artist name as commonly written.
 - Output only valid JSON, no markdown or extra text.`;
 
-  const fewShot = `Examples of accurate chord charts (from Ultimate Guitar, official tabs):
+const CHORD_FEW_SHOT = `Examples of accurate chord charts (from Ultimate Guitar, official tabs):
 - "Let It Be" by Beatles: Verse [C, G, Am, F, C, G, F, C], Chorus [C, G, Am, F, C, G, F, C]
-- "Wonderwall" by Oasis: Intro [Em7, G, Dsus4, A7sus4], Verse [Em7, G, Dsus4, A7sus4], Chorus [C, D, Em7, G]
+- "Wonderwall" by Oasis: Intro [Em7, G, Dsus4, A7sus4], Verse [Em7, G, Dsus4, A7sus4], Chorus [C, D, Em7, G] — use Dsus4 and A7sus4, not D and A
 - "Tears in Heaven" by Eric Clapton: Intro [A, E/G#, F#m, A/E, D/F#, E7sus4, E7, A], Verse [F#m, C#m, Bm, A], Chorus [A, E, F#m, A/E, D/F#, A/E, E]
 - "Hotel California" by Eagles: Intro [Bm, F#, A, E, G, D, Em, F#], Verse [Bm, F#, A, E, G, D, Em, F#]
+- "Brown Eyed Girl" by Van Morrison: Verse [G, C, G, D], Chorus [G, C, G, D, G, C, G, D] — simple I-IV-I-V
+- "Stand By Me" by Ben E. King: Verse [A, F#m, D, E] or [C, Am, F, G] — I-vi-IV-V
+- "Tears in Heaven" by Eric Clapton: Intro [A, E/G#, F#m, A/E, D/F#, E7sus4, E7, A], Verse [F#m, C#m, Bm, A], Chorus [A, E, F#m, A/E, D/F#, A/E, E] — use slash chords
 - "海闊天空" by Beyond: Verse [Dm, Bb, C, F, Bb, C, Dm], Chorus [F, Bb, C, Dm, Bb, C, F]
 - "Gangnam Style" by PSY: Verse [Bm, G, D, A], Chorus [Bm, G, D, A]
 - For obscure songs: return only 1–2 sections with chords you are confident about; omit sections you would have to guess.`;
 
-  const prompt = `Chord chart for: "${songQuery}"
-${ragContext || ''}
-
-${fewShot}
-
-Return the actual chord progression for this song (the one used in real chord sheets / tabs). 
-
-CRITICAL: You must return ONLY valid JSON. No markdown, no code blocks, no explanations, no additional text. Start with { and end with }.
-
-Use this JSON structure. For chord-over-lyric display, include "parts" in each progression (chord + lyric chunk pairs). If you don't know lyrics, omit "parts" and use only "chords":
-
-{
+const CHORD_JSON_STRUCTURE = `{
   "title": "Exact Song Title",
   "artist": "Artist Name",
   "progressions": [
     { "label": "Intro", "chords": ["A", "E", "F#m", "A/E"] },
+    { "label": "Verse", "chords": ["F#m", "C#m", "Bm"], "parts": [
+      { "chord": "F#m", "lyric": "I must be " },
+      { "chord": "C#m", "lyric": "strong " },
+      { "chord": "Bm", "lyric": "and carry on" }
+    ] },
     { "label": "Chorus", "chords": ["A", "E", "F#m", "A/E"], "parts": [
       { "chord": "A", "lyric": "Would " },
       { "chord": "E", "lyric": "you " },
       { "chord": "F#m", "lyric": "know my " },
       { "chord": "A/E", "lyric": "name" }
-    ] },
-    { "label": "Verse", "chords": ["F#m", "C#m", "Bm"], "parts": [
-      { "chord": "F#m", "lyric": "I must be " },
-      { "chord": "C#m", "lyric": "strong " },
-      { "chord": "Bm", "lyric": "and carry on" }
     ] }
   ]
 }
 
-Rules: Include "parts" (array of {chord, lyric}) when you know the lyrics—each chord aligns above its lyric chunk. Omit "parts" for instrumental sections or when unsure. 2–4 sections. Return ONLY the JSON object.`;
+Rules: Include "parts" for Verse, Chorus, Bridge—put each chord above the syllable/word it accompanies. Split lyrics into small chunks (1–3 words per chord). Omit "parts" only for instrumental Intro/Outro. 2–4 sections. Return ONLY the JSON object.`;
 
+function buildSpotifyHint(spotifyId, spotifyMetadata) {
+  if (!spotifyId) return '';
+  let hint = `\nSpotify track ID: ${spotifyId} (use for disambiguation if needed).`;
+  if (spotifyMetadata && typeof spotifyMetadata === 'string') {
+    hint += `\nSpotify metadata: ${spotifyMetadata}. Use this key and tempo to improve chord accuracy.`;
+  }
+  return hint;
+}
+
+async function generateWithXai(songQuery, spotifyId, spotifyMetadata) {
+  const spotifyHint = buildSpotifyHint(spotifyId, spotifyMetadata);
+  const prompt = `Chord chart for: "${songQuery}"${spotifyHint}
+
+${CHORD_FEW_SHOT}
+
+Return the actual chord progression for this song (the one used in real chord sheets / tabs). 
+
+CRITICAL: You must return ONLY valid JSON. No markdown, no code blocks, no explanations, no additional text. Start with { and end with }.
+
+Use this JSON structure. ALWAYS include "parts" (chord + lyric pairs) for sections with lyrics. Each chord aligns above its lyric chunk:
+
+${CHORD_JSON_STRUCTURE}`;
+
+  const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${XAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'grok-4-1-fast-reasoning',
+      messages: [
+        { role: 'system', content: CHORD_SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0,
+      max_tokens: 4000,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Xai ${response.status}: ${err.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content;
+}
+
+async function generateWithGroq(songQuery, spotifyId, spotifyMetadata) {
+  const spotifyHint = buildSpotifyHint(spotifyId, spotifyMetadata);
+  const prompt = `Chord chart for: "${songQuery}"${spotifyHint}
+
+${CHORD_FEW_SHOT}
+
+Return the actual chord progression for this song. Return ONLY valid JSON. No markdown, no code blocks.
+
+${CHORD_JSON_STRUCTURE}`;
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        { role: 'system', content: CHORD_SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0,
+      max_tokens: 4000,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Groq ${response.status}: ${err.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content;
+}
+
+function parseChordJson(content) {
+  let jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
+  if (jsonMatch) content = jsonMatch[1];
+  const jsonObjectMatch = content.match(/\{[\s\S]*\}/);
+  if (jsonObjectMatch) content = jsonObjectMatch[0];
+  let songData;
   try {
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${XAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'grok-4-1-fast-reasoning',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0,
-        max_tokens: 4000,
-      }),
-    });
+    songData = JSON.parse(content.trim());
+  } catch (parseError) {
+    const aggressiveMatch = content.match(/\{[\s\S]*"title"[\s\S]*"progressions"[\s\S]*\}/);
+    if (aggressiveMatch) songData = JSON.parse(aggressiveMatch[0]);
+    else throw new Error('Invalid JSON in AI response');
+  }
+  if (!songData.title || !songData.progressions || !Array.isArray(songData.progressions)) {
+    throw new Error('Invalid response structure - missing title or progressions');
+  }
+  return songData;
+}
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      console.error('Xai API error:', response.status, errorText);
-      return res.status(response.status).json({
-        error: 'Xai API request failed',
-        details: errorText.slice(0, 300),
-      });
-    }
-
-    const data = await response.json();
-    let content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      return res.status(502).json({ error: 'Invalid Xai response structure' });
-    }
-
-    // Extract JSON from response (handle markdown code blocks)
-    let jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) content = jsonMatch[1];
-    const jsonObjectMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonObjectMatch) content = jsonObjectMatch[0];
-
-    let songData;
-    try {
-      songData = JSON.parse(content.trim());
-    } catch (parseError) {
-      const aggressiveMatch = content.match(/\{[\s\S]*"title"[\s\S]*"progressions"[\s\S]*\}/);
-      if (aggressiveMatch) songData = JSON.parse(aggressiveMatch[0]);
-      else {
-        return res.status(502).json({ error: 'Invalid JSON in Xai response', raw: content.slice(0, 200) });
-      }
-    }
-    if (!songData.title || !songData.progressions || !Array.isArray(songData.progressions)) {
-      return res.status(502).json({ error: 'Invalid response structure - missing title or progressions' });
-    }
-
-    res.json({ song: songData, source: 'ai' });
+app.post('/api/generate-chord-chart', async (req, res) => {
+  const { songQuery, model = 'xai', spotifyId, spotifyMetadata } = req.body || {};
+  if (!songQuery || typeof songQuery !== 'string') {
+    return res.status(400).json({ error: 'songQuery required' });
+  }
+  const useModel = (model === 'groq' ? 'groq' : 'xai');
+  if (useModel === 'groq' && !GROQ_API_KEY) {
+    return res.status(503).json({ error: 'Groq not configured. Set GROQ_API_KEY in server/.env' });
+  }
+  if (useModel === 'xai' && !XAI_API_KEY) {
+    return res.status(503).json({ error: 'Xai AI is not configured. Set XAI_API_KEY in server/.env' });
+  }
+  try {
+    const content = useModel === 'groq'
+      ? await generateWithGroq(songQuery, spotifyId || null, spotifyMetadata || null)
+      : await generateWithXai(songQuery, spotifyId || null, spotifyMetadata || null);
+    if (!content) return res.status(502).json({ error: 'Invalid AI response structure' });
+    const songData = parseChordJson(content);
+    res.json({ song: songData, source: 'ai', model: useModel });
   } catch (e) {
-    console.error('Xai proxy error:', e);
-    res.status(500).json({ error: 'Failed to generate chord chart', details: e.message });
+    console.error('Chord generation error:', e);
+    res.status(500).json({ error: e.message || 'Failed to generate chord chart', details: e.message });
   }
 });
 
-// --- Free AI proxy (no auth required) ---
-app.post('/api/generate-chords', async (req, res) => {
-  if (!DEEPSEEK_API_KEY) {
-    return res.status(503).json({
-      error: 'Free AI search is not configured. Set DEEPSEEK_API_KEY on the server.',
-    });
+// --- Xai AI proxy (legacy; uses shared generateWithXai) ---
+app.post('/api/generate-chord-chart-xai', async (req, res) => {
+  const { songQuery, spotifyId, spotifyMetadata } = req.body || {};
+  if (!XAI_API_KEY) {
+    return res.status(503).json({ error: 'Xai AI is not configured. Set XAI_API_KEY in server/.env' });
   }
-  const { query } = req.body || {};
-  if (!query || typeof query !== 'string') {
-    return res.status(400).json({ error: 'Query required' });
+  if (!songQuery || typeof songQuery !== 'string') {
+    return res.status(400).json({ error: 'songQuery required' });
   }
-
-  // RAG: Top-k chord reference for context
-  const ragRefs = searchChordReferenceTopK(query, 2);
-  const ragContext = ragRefs.length > 0
-    ? '\nSIMILAR REFERENCE SONGS (use as style/structure guide if relevant):\n' +
-      ragRefs.map(r => JSON.stringify({ title: r.title, artist: r.artist, progressions: r.progressions })).join('\n') + '\n'
-    : '';
-
-  const systemPrompt = `You are an expert at guitar and piano chord charts. Your goal is accuracy.
-- NEVER invent chord progressions. Only return progressions you have high confidence in from real transcriptions (official tabs, chord sheets, or widely accepted versions).
-- When unsure, use common progressions for that song; if none exist, return fewer sections.
-- Give the real chord progression used in the actual song (as heard on the record or in common tabs).
-- Use the correct key (e.g. capo = write in concert key, or state key and use common chord shapes).
-- Use standard notation: C, Dm, Em, F, G, Am, Bdim, C7, F#m, Bb, etc. Include sharps/flats when needed.
-- Match the song structure: Verse, Chorus, Bridge, Intro, Outro. Repeat the same progression for the same section (e.g. Verse 1 and Verse 2 share the same chords).
-- If the song uses a well-known progression (e.g. I-V-vi-IV, I-vi-IV-V), use that. Do not invent progressions—prefer the standard one for that song.
-- Support songs in ANY language: English, Cantonese, Mandarin, Korean, Japanese, etc. Use the original title and artist name as commonly written.
-- Output only valid JSON, no markdown or extra text.`;
-
-  const fewShot = `Examples of accurate chord charts:
-- "Let It Be" by Beatles: Verse [C, G, Am, F, C, G, F, C], Chorus [C, G, Am, F, C, G, F, C]
-- "Wonderwall" by Oasis: Intro [Em7, G, Dsus4, A7sus4], Verse [Em7, G, Dsus4, A7sus4]
-- "海闊天空" by Beyond: Verse [Dm, Bb, C, F, Bb, C, Dm], Chorus [F, Bb, C, Dm, Bb, C, F]
-- "Gangnam Style" by PSY: Verse [Bm, G, D, A], Chorus [Bm, G, D, A]
-`;
-
-  const prompt = `Chord chart for: "${query}"
-${ragContext}
-
-${fewShot}
-
-Return the actual chord progression for this song (the one used in real chord sheets / tabs). Use this exact JSON structure only:
-
-{
-  "title": "Exact Song Title",
-  "artist": "Artist Name",
-  "progressions": [
-    { "label": "Intro", "chords": ["C", "G", "Am", "F"] },
-    { "label": "Verse", "chords": ["C", "G", "Am", "F"] },
-    { "label": "Chorus", "chords": ["F", "G", "C", "Am"] }
-  ]
-}
-
-Rules: 2–4 sections (Intro, Verse, Chorus, Bridge, etc.). 4–8 chords per section. Same section name = same chord list. No lyrics. Only valid JSON.`;
-
   try {
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0,
-        max_tokens: 1200,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return res.status(response.status).json({
-        error: 'AI request failed',
-        details: errText.slice(0, 200),
-      });
-    }
-
-    const data = await response.json();
-    let content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      return res.status(502).json({ error: 'Invalid AI response' });
-    }
-
-    const jsonMatch =
-      content.match(/```json\s*([\s\S]*?)\s*```/) ||
-      content.match(/```\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) content = jsonMatch[1];
-    const songData = JSON.parse(content.trim());
-    if (!songData.title || !songData.progressions || !Array.isArray(songData.progressions)) {
-      return res.status(502).json({ error: 'Invalid chord chart structure' });
-    }
-    res.json(songData);
+    const content = await generateWithXai(songQuery, spotifyId || null, spotifyMetadata || null);
+    if (!content) return res.status(502).json({ error: 'Invalid Xai response structure' });
+    const songData = parseChordJson(content);
+    res.json({ song: songData, source: 'ai', model: 'xai' });
   } catch (e) {
-    console.error('AI proxy error:', e);
-    res.status(500).json({ error: 'Failed to generate chords' });
+    console.error('Xai proxy error:', e);
+    res.status(500).json({ error: e.message || 'Failed to generate chord chart', details: e.message });
   }
 });
 
@@ -687,9 +506,22 @@ app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Beethovan.ai server on http://localhost:${PORT}`);
-  if (!DEEPSEEK_API_KEY) console.log('Warning: DEEPSEEK_API_KEY not set — free AI search disabled');
-  if (!XAI_API_KEY) console.log('Warning: XAI_API_KEY not set — Xai chord charts disabled (CORS-safe proxy)');
+const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 = accept connections from anywhere (for beethovan.ai)
+const server = app.listen(PORT, HOST, () => {
+  try { db.syncEmailList(); } catch (_) {}
+  const localUrl = HOST === '0.0.0.0' || HOST === '::' ? 'localhost' : HOST;
+  console.log(`Beethovan.ai server on http://${HOST}:${PORT}`);
+  console.log(`  Real Book: http://${localUrl}:${PORT}/realbook`);
+  if (!XAI_API_KEY) console.log('Warning: XAI_API_KEY not set — chord charts disabled');
   if (!stripe) console.log('Info: Stripe not set — upgrade flow will show "not configured"');
+});
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\nPort ${PORT} is already in use. Either:`);
+    console.error(`  1) Free it:  kill $(lsof -t -i :${PORT})`);
+    console.error(`  2) Or run:  PORT=3010 npm start  →  http://localhost:3010/realbook\n`);
+  } else {
+    console.error('Server error:', err);
+  }
+  process.exit(1);
 });

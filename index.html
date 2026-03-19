@@ -22,9 +22,11 @@
             <h1 class="logo">BEETHOVAN.AI</h1>
             <p class="tagline">CHORD CHARTS</p>
             <div class="header-buttons">
+                <button id="darkModeBtn" class="header-settings-btn dark-mode-btn" title="Toggle dark mode">🌙</button>
                 <span id="authStatus" class="auth-status"></span>
                 <button id="loginBtn" class="header-settings-btn" style="display: none;">LOG IN</button>
                 <button id="registerBtn" class="header-settings-btn" style="display: none;">REGISTER</button>
+                <a href="/realbook" class="header-settings-btn" style="text-decoration:none;display:inline-flex;align-items:center;">📖 REAL BOOK</a>
                 <button id="savedSongsBtn" class="header-settings-btn">📁 MY SAVED SONGS</button>
                 <button id="upgradeBtn" class="header-settings-btn upgrade-btn" style="display: none;">✨ UNLIMITED</button>
                 <button id="logoutBtn" class="header-settings-btn" style="display: none;">LOG OUT</button>
@@ -44,7 +46,11 @@
                     <button id="searchBtn" class="search-btn">SEARCH</button>
                 </div>
                 <div class="api-status" id="apiStatus">
-                    <span id="apiStatusText">Xai AI</span>
+                    <label for="modelSelect">AI:</label>
+                    <select id="modelSelect" class="model-select">
+                        <option value="xai">Xai (best)</option>
+                        <option value="groq">Groq (fast)</option>
+                    </select>
                 </div>
             </div>
 
@@ -67,6 +73,7 @@
                     <button class="close-btn" id="closeSavedSongs">&times;</button>
                 </div>
                 <div class="modal-body">
+                    <input type="text" id="savedSongsFilter" class="api-key-input" placeholder="Filter by artist or title..." style="margin-bottom: 1rem;">
                     <div id="savedSongsList" class="saved-songs-list"></div>
                 </div>
             </div>
@@ -136,11 +143,35 @@
             </div>
         </div>
 
+        <!-- Report Inaccurate Modal -->
+        <div id="reportModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>REPORT INACCURATE</h2>
+                    <button class="close-btn" id="closeReport">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="settings-info">Help us improve! Describe what's wrong or paste the correct chord progression (JSON).</p>
+                    <div class="auth-form">
+                        <label for="reportNote">What's wrong? (required)</label>
+                        <textarea id="reportNote" class="api-key-input" rows="3" placeholder="e.g. Verse chords should be C G Am F, not C G F Am"></textarea>
+                        <label for="reportCorrected" style="margin-top: 1rem;">Correct chords (optional - paste JSON)</label>
+                        <textarea id="reportCorrected" class="api-key-input" rows="4" placeholder='[{"label":"Verse","chords":["C","G","Am","F"]}]'></textarea>
+                        <p id="reportError" class="auth-error" style="display: none;"></p>
+                        <div class="modal-actions" style="margin-top: 1rem;">
+                            <button id="reportSubmitBtn" class="save-btn">SEND REPORT</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <footer class="footer">
             <p>&copy; 2024–2026 BEETHOVAN.AI</p>
         </footer>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 server/.env
 
 # Dependencies
+node_modules/
 server/node_modules/
 
 # Data

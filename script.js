@@ -109,56 +109,31 @@ async function removeSavedSong(index) {
     renderSavedSongs();
 }
 
-async function reportChordError(song) {
-    const corrected = prompt(
-        'Report wrong chords for "' + song.title + '"?\n\n' +
-        'If you know the correct chord progression, paste it here (optional).\n' +
-        'Example format: Intro: C G Am F | Verse: C G Am F | Chorus: F G C Am',
-        ''
-    );
-    const payload = {
-        title: song.title,
-        artist: song.artist || '',
-        progressions: song.progressions,
-        correctedText: corrected || null,
-        reportedAt: new Date().toISOString()
-    };
-    try {
-        if (API_BASE) {
-            const res = await fetch(API_BASE + '/api/chord-feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                alert('Thank you! Your feedback helps improve chord accuracy.');
-                return;
-            }
-        }
-        // Fallback: store in localStorage if no server
-        const stored = JSON.parse(localStorage.getItem('beethovan_ai_chord_feedback') || '[]');
-        stored.push(payload);
-        localStorage.setItem('beethovan_ai_chord_feedback', JSON.stringify(stored));
-        alert('Thank you! Feedback saved locally.');
-    } catch (e) {
-        console.error('Feedback error:', e);
-        alert('Could not submit feedback. Please try again.');
-    }
-}
-
-// Render saved songs list
-function renderSavedSongs() {
+// Render saved songs list (optional filter by artist/title)
+function renderSavedSongs(filter = '') {
     const savedSongsList = document.getElementById('savedSongsList');
     if (!savedSongsList) return;
-    
+
+    const q = (filter || '').toLowerCase().trim();
+    const filtered = q
+        ? savedSongs.filter(s => (s.title || '').toLowerCase().includes(q) || (s.artist || '').toLowerCase().includes(q))
+        : savedSongs;
+
     savedSongsList.innerHTML = '';
-    
+
     if (savedSongs.length === 0) {
         savedSongsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No saved songs yet. Save a song to see it here!</p>';
         return;
     }
-    
-    savedSongs.forEach((song, index) => {
+
+    if (filtered.length === 0) {
+        savedSongsList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No matches for "' + escapeHtml(q) + '"</p>';
+        return;
+    }
+
+    filtered.forEach((song) => {
+        const index = savedSongs.findIndex(s => s.title === song.title && (s.artist || '') === (song.artist || ''));
+        if (index < 0) return;
         const songDiv = document.createElement('div');
         songDiv.className = 'saved-song-item';
         const displayTitle = song.titleEn ? `${song.title} (${song.titleEn})` : song.title;
@@ -199,6 +174,19 @@ let spotifyConfig = {
 
 // Cache for AI-generated results
 const aiCache = new Map();
+
+// User preferences (model, dark mode, transpose)
+const USER_PREFS_KEY = 'beethovan_ai_prefs';
+function loadUserPrefs() {
+    try {
+        const s = localStorage.getItem(USER_PREFS_KEY);
+        return s ? JSON.parse(s) : {};
+    } catch (e) { return {}; }
+}
+function saveUserPrefs(prefs) {
+    const current = loadUserPrefs();
+    localStorage.setItem(USER_PREFS_KEY, JSON.stringify({ ...current, ...prefs }));
+}
 
 // Load Spotify config from localStorage (if exists)
 function loadApiConfig() {
@@ -289,44 +277,41 @@ async function searchSpotify(query) {
     }
 }
 
-// Free AI (backend proxy - no key needed)
-async function generateChordChartWithFreeAI(songQuery) {
-    const cacheKey = songQuery.toLowerCase().trim();
-    if (aiCache.has(cacheKey)) {
-        return aiCache.get(cacheKey);
-    }
+// Get Spotify audio features (BPM, key) for a track - improves AI chord accuracy
+const KEY_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+async function getSpotifyAudioFeatures(spotifyId) {
+    const token = await getSpotifyToken();
+    if (!token || !spotifyId) return null;
     try {
-        const res = await fetch(API_BASE + '/api/generate-chords', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: songQuery })
+        const res = await fetch(`https://api.spotify.com/v1/audio-features/${spotifyId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            console.error('Free AI error:', err);
-            return null;
+        if (!res.ok) return null;
+        const data = await res.json();
+        const parts = [];
+        if (typeof data.tempo === 'number' && data.tempo > 0) {
+            parts.push(`${Math.round(data.tempo)} BPM`);
         }
-        const songData = await res.json();
-        if (!songData.title || !songData.progressions || !Array.isArray(songData.progressions)) {
-            return null;
+        if (typeof data.key === 'number' && data.key >= 0 && data.key <= 11) {
+            const keyName = KEY_NAMES[data.key];
+            const mode = data.mode === 0 ? 'minor' : 'major';
+            parts.push(`key ${keyName} ${mode}`);
         }
-        aiCache.set(cacheKey, songData);
-        return songData;
+        return parts.length ? parts.join(', ') : null;
     } catch (e) {
-        console.error('Free AI request failed', e);
+        console.warn('Spotify audio features:', e);
         return null;
     }
 }
 
-// AI chord generation - uses Xai API
-async function generateChordChartWithAI(songQuery, spotifyId = null) {
+// AI chord generation - uses unified /api/generate-chord-chart (Xai or Groq)
+async function generateChordChartWithAI(songQuery, spotifyId = null, spotifyMetadata = null) {
     const cacheKey = songQuery.toLowerCase().trim();
-    if (aiCache.has(cacheKey)) {
-        const cached = aiCache.get(cacheKey);
-        return typeof cached === 'object' && cached.song ? cached : { song: cached, source: 'ai' };
+    const model = loadUserPrefs().model || 'xai';
+    const cacheVal = aiCache.get(cacheKey);
+    if (cacheVal && (!model || (cacheVal.model || 'xai') === model)) {
+        return typeof cacheVal === 'object' && cacheVal.song ? cacheVal : { song: cacheVal, source: 'ai' };
     }
-
-    const ragContext = '';
 
     if (!CAN_USE_SERVER) {
         throw new Error('AI chord charts require the app server. Open http://localhost:3001');
@@ -335,11 +320,11 @@ async function generateChordChartWithAI(songQuery, spotifyId = null) {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
-        const response = await fetch((API_BASE || '') + '/api/generate-chord-chart-xai', {
+        const response = await fetch((API_BASE || '') + '/api/generate-chord-chart', {
             method: 'POST',
             signal: controller.signal,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songQuery, ragContext })
+            body: JSON.stringify({ songQuery, model, spotifyId, spotifyMetadata })
         });
 
         clearTimeout(timeoutId);
@@ -347,19 +332,19 @@ async function generateChordChartWithAI(songQuery, spotifyId = null) {
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             const msg = err.details || err.error || response.statusText;
-            console.error('Xai proxy error:', response.status, msg);
+            console.error('Chord API error:', response.status, msg);
             throw new Error(msg || `API error: ${response.status}`);
         }
 
-        const { song: songData, source } = await response.json();
+        const { song: songData, source, model: usedModel } = await response.json();
         if (!songData || !songData.title || !songData.progressions || !Array.isArray(songData.progressions)) {
             throw new Error('Invalid response structure - missing title or progressions');
         }
 
-        aiCache.set(cacheKey, { song: songData, source: source || 'ai' });
-        return { song: songData, source: source || 'ai' };
+        aiCache.set(cacheKey, { song: songData, source: source || 'ai', model: usedModel });
+        return { song: songData, source: source || 'ai', model: usedModel };
     } catch (error) {
-        console.error('Xai API Error:', error);
+        console.error('AI chord Error:', error);
         if (error.name === 'AbortError') {
             throw new Error('Request timed out (60s). The AI may be slow—try again.');
         }
@@ -402,12 +387,16 @@ async function searchSong(regenerate = false) {
 
     let finalQuery = searchQuery;
     let spotifyId = null;
+    let spotifyMetadata = null;
     if (!regenerate && spotifyConfig.clientId && spotifyConfig.clientSecret) {
         resultsContainer.innerHTML = '<div class="loading">SEARCHING SPOTIFY</div>';
         const spotifyResult = await searchSpotify(searchQuery);
         if (spotifyResult) {
             finalQuery = `${spotifyResult.title} ${spotifyResult.artist}`;
             spotifyId = spotifyResult.spotifyId || null;
+            if (spotifyId) {
+                spotifyMetadata = await getSpotifyAudioFeatures(spotifyId);
+            }
         }
     }
 
@@ -420,7 +409,7 @@ async function searchSong(regenerate = false) {
     }, 8000);
 
     try {
-        const result = await generateChordChartWithAI(finalQuery, spotifyId);
+        const result = await generateChordChartWithAI(finalQuery, spotifyId, spotifyMetadata);
         clearTimeout(slowMsg);
         
         if (result && result.song && result.song.progressions && result.song.progressions.length > 0) {
@@ -468,13 +457,18 @@ function transposeChord(chordStr, semitones) {
 let currentDisplayedSong = null;
 let currentTransposeSemitones = 0;
 
-// Display chord chart (always from Xai AI)
-function displayChordChart(song, transposeSemitones = 0) {
+// Display chord chart
+function displayChordChart(song, transposeSemitones = null) {
     if (!song || !song.progressions || !Array.isArray(song.progressions) || song.progressions.length === 0) {
         showError(lastSearchQuery || song?.title || 'Unknown', 'No chord data to display.');
         return;
     }
     currentDisplayedSong = song;
+    // Auto-transpose: use saved preference if not explicitly passed
+    if (transposeSemitones === null || transposeSemitones === undefined) {
+        const prefs = loadUserPrefs();
+        transposeSemitones = typeof prefs.transposeSemitones === 'number' ? prefs.transposeSemitones : 0;
+    }
     currentTransposeSemitones = transposeSemitones;
 
     const displayTitle = song.titleEn ? `${song.title} (${song.titleEn})` : song.title;
@@ -487,7 +481,7 @@ function displayChordChart(song, transposeSemitones = 0) {
     const keyLabel = transposeSemitones === 0 ? 'Original' : (transposeSemitones > 0 ? '+' + transposeSemitones : transposeSemitones);
     
     let html = `
-        <div class="chord-chart">
+        <div class="chord-chart" id="currentChordChart">
             ${sourceBadge}
             <div class="chart-header">
                 <div>
@@ -501,9 +495,11 @@ function displayChordChart(song, transposeSemitones = 0) {
                         <span id="transposeValue" class="transpose-value">${keyLabel}</span>
                         <button type="button" id="transposeUp" class="transpose-btn" title="Transpose up">+</button>
                     </div>
+                    <button id="reportBtn" class="save-song-btn report-btn" type="button" title="Report inaccurate chords">⚠ REPORT</button>
+                    <button id="shareChartBtn" class="save-song-btn copy-btn" type="button" title="Copy share link">🔗 SHARE</button>
+                    <button id="exportPdfBtn" class="save-song-btn copy-btn" type="button" title="Export as PDF">📄 PDF</button>
                     <button id="copyChartBtn" class="save-song-btn copy-btn" type="button" title="Copy chord chart">📋 COPY</button>
                     <button id="regenerateBtn" class="save-song-btn regenerate-btn" type="button" title="Generate again">🔄 REGENERATE</button>
-                    <button id="reportErrorBtn" class="save-song-btn report-btn" type="button" title="Report wrong chords">⚠️ REPORT</button>
                     <button id="saveSongBtn" class="save-song-btn" ${isSaved ? 'disabled' : ''}>
                         ${isSaved ? '✓ SAVED' : '💾 SAVE'}
                     </button>
@@ -511,26 +507,28 @@ function displayChordChart(song, transposeSemitones = 0) {
             </div>
     `;
 
-    // Display progressions (chord-over-lyric when parts exist, else chord boxes)
+    // Display progressions (chord-over-lyric style like Ultimate Guitar)
     song.progressions.forEach((progression, index) => {
-        html += `<div class="chord-progression"><div class="progression-label">${progression.label}</div>`;
+        const sectionLabel = progression.label ? `[${progression.label}]` : '';
+        html += `<div class="chord-progression"><div class="progression-label">${sectionLabel}</div>`;
 
         if (progression.parts && progression.parts.length > 0) {
-            // Chord-over-lyric layout (Ultimate Guitar style)
+            // Chord-over-lyric layout (chord above lyric)
             html += '<div class="chord-lyric-block">';
-            progression.parts.forEach((part, i) => {
+            progression.parts.forEach((part) => {
                 const displayChord = transposeChord(part.chord, transposeSemitones);
                 html += `<span class="chord-lyric-pair"><span class="chord-above">${displayChord}</span><span class="lyric-below">${escapeHtml(part.lyric || '')}</span></span>`;
             });
             html += '</div>';
         } else {
-            // Fallback: chord boxes only
-            html += '<div class="chords-row" id="chords-' + index + '">';
-            (progression.chords || []).forEach((chord, chordIndex) => {
-                const displayChord = transposeChord(chord, transposeSemitones);
-                html += `<div class="chord-box" data-chord="${displayChord}" data-progression="${index}" data-index="${chordIndex}">${displayChord}</div>`;
-            });
-            html += '</div>';
+            // Chords only: chord line (blue, above blank line) — no grid boxes
+            const chords = (progression.chords || []).map(c => transposeChord(c, transposeSemitones));
+            if (chords.length > 0) {
+                html += '<div class="chord-line-block">';
+                html += '<div class="chord-line">' + chords.map(c => `<span class="chord-inline">${c}</span>`).join(' ') + '</div>';
+                html += '<div class="lyric-line lyric-empty"></div>';
+                html += '</div>';
+            }
         }
         html += '</div>';
     });
@@ -551,15 +549,49 @@ function displayChordChart(song, transposeSemitones = 0) {
         });
     }
 
-    // Transpose buttons
+    // Transpose buttons (save preference when user changes key)
     document.getElementById('transposeDown').addEventListener('click', () => {
         const newSemitones = currentTransposeSemitones - 1;
+        saveUserPrefs({ transposeSemitones: newSemitones });
         displayChordChart(currentDisplayedSong, newSemitones);
     });
     document.getElementById('transposeUp').addEventListener('click', () => {
         const newSemitones = currentTransposeSemitones + 1;
+        saveUserPrefs({ transposeSemitones: newSemitones });
         displayChordChart(currentDisplayedSong, newSemitones);
     });
+
+    // Report inaccurate
+    const reportBtn = document.getElementById('reportBtn');
+    if (reportBtn) {
+        reportBtn.addEventListener('click', () => openReportModal(song));
+    }
+
+    // Share link (copy URL with encoded chart)
+    const shareChartBtn = document.getElementById('shareChartBtn');
+    if (shareChartBtn) {
+        shareChartBtn.addEventListener('click', () => {
+            const payload = { song, transposeSemitones: currentTransposeSemitones };
+            const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, '-').replace(/\//g, '_');
+            const url = window.location.origin + window.location.pathname + '?share=' + encoded;
+            navigator.clipboard.writeText(url).then(() => {
+                const orig = shareChartBtn.textContent;
+                shareChartBtn.textContent = '✓ COPIED';
+                setTimeout(() => { shareChartBtn.textContent = orig; }, 1500);
+            }).catch(() => alert('Copy failed'));
+        });
+    }
+
+    // Export PDF
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    if (exportPdfBtn && typeof html2pdf !== 'undefined') {
+        exportPdfBtn.addEventListener('click', () => {
+            const el = document.getElementById('currentChordChart');
+            if (!el) return;
+            const opt = { margin: 10, filename: `${(song.title || 'chart').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } };
+            html2pdf().set(opt).from(el).save().catch(() => alert('PDF export failed'));
+        });
+    }
 
     // Copy chord chart (with current transpose)
     document.getElementById('copyChartBtn').addEventListener('click', () => {
@@ -569,7 +601,7 @@ function displayChordChart(song, transposeSemitones = 0) {
             ''
         ];
         song.progressions.forEach(p => {
-            lines.push(p.label);
+            lines.push(p.label ? `[${p.label}]` : '');
             if (p.parts && p.parts.length > 0) {
                 const chordLine = p.parts.map(pt => transposeChord(pt.chord, currentTransposeSemitones)).join(' ');
                 const lyricLine = p.parts.map(pt => pt.lyric || '').join('');
@@ -590,7 +622,6 @@ function displayChordChart(song, transposeSemitones = 0) {
         }).catch(() => alert('Copy failed'));
     });
 
-    // Regenerate (only when from AI)
     const regenBtn = document.getElementById('regenerateBtn');
     if (regenBtn) {
         regenBtn.addEventListener('click', () => {
@@ -598,27 +629,6 @@ function displayChordChart(song, transposeSemitones = 0) {
             searchSong(true);
         });
     }
-
-    // Report wrong chords (only when from AI)
-    const reportBtn = document.getElementById('reportErrorBtn');
-    if (reportBtn) {
-        reportBtn.addEventListener('click', () => reportChordError(song));
-    }
-
-    // Add click handlers for chord boxes
-    document.querySelectorAll('.chord-box').forEach(box => {
-        box.addEventListener('click', function() {
-            const progressionIndex = this.dataset.progression;
-            
-            // Remove active class from all chords in this progression
-            document.querySelectorAll(`[data-progression="${progressionIndex}"]`).forEach(b => {
-                b.classList.remove('active');
-            });
-            
-            // Add active class to clicked chord
-            this.classList.add('active');
-        });
-    });
 }
 
 // Show error message
@@ -865,6 +875,73 @@ function doUpgrade() {
     openUpgrade();
 }
 
+// Report Inaccurate Modal
+function openReportModal(song) {
+    if (!song) return;
+    window._reportSong = song;
+    document.getElementById('reportNote').value = '';
+    document.getElementById('reportCorrected').value = '';
+    document.getElementById('reportError').style.display = 'none';
+    document.getElementById('reportModal').style.display = 'flex';
+}
+
+function closeReport() {
+    document.getElementById('reportModal').style.display = 'none';
+    window._reportSong = null;
+}
+
+async function doReportSubmit() {
+    const song = window._reportSong;
+    const errEl = document.getElementById('reportError');
+    const note = document.getElementById('reportNote').value.trim();
+    const correctedRaw = document.getElementById('reportCorrected').value.trim();
+
+    if (!note) {
+        errEl.textContent = 'Please describe what\'s wrong.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    let correctedProgressions = null;
+    if (correctedRaw) {
+        try {
+            const parsed = JSON.parse(correctedRaw);
+            correctedProgressions = Array.isArray(parsed) ? parsed : (parsed.progressions || null);
+        } catch (e) {
+            errEl.textContent = 'Invalid JSON in correct chords.';
+            errEl.style.display = 'block';
+            return;
+        }
+    }
+
+    const payload = {
+        title: song.title,
+        artist: song.artist || 'Unknown',
+        originalProgressions: song.progressions || [],
+        note
+    };
+    if (correctedProgressions) payload.correctedProgressions = correctedProgressions;
+
+    try {
+        const res = await fetch(API_BASE + '/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            closeReport();
+            alert('Thank you for your feedback!');
+            return;
+        }
+        errEl.textContent = data.error || 'Failed to send report';
+        errEl.style.display = 'block';
+    } catch (e) {
+        errEl.textContent = 'Network error. Is the server running?';
+        errEl.style.display = 'block';
+    }
+}
+
 // Saved Songs Modal Functions
 async function openSavedSongs() {
     const modal = document.getElementById('savedSongsModal');
@@ -912,6 +989,10 @@ songInput.addEventListener('input', (e) => {
 // Saved Songs modal events
 document.getElementById('savedSongsBtn').addEventListener('click', openSavedSongs);
 document.getElementById('closeSavedSongs').addEventListener('click', closeSavedSongs);
+const savedSongsFilterEl = document.getElementById('savedSongsFilter');
+if (savedSongsFilterEl) {
+    savedSongsFilterEl.addEventListener('input', (e) => renderSavedSongs(e.target.value));
+}
 
 // Auth modal events
 document.getElementById('loginBtn').addEventListener('click', openLogin);
@@ -926,6 +1007,36 @@ document.getElementById('closeUpgrade').addEventListener('click', closeUpgrade);
 document.querySelectorAll('.upgrade-plan-btn').forEach(btn => {
     btn.addEventListener('click', () => doCheckout(btn.dataset.plan));
 });
+
+// Report modal
+document.getElementById('closeReport').addEventListener('click', closeReport);
+document.getElementById('reportSubmitBtn').addEventListener('click', doReportSubmit);
+
+// Model selector
+const modelSelect = document.getElementById('modelSelect');
+if (modelSelect) {
+    const prefs = loadUserPrefs();
+    if (prefs.model) modelSelect.value = prefs.model;
+    modelSelect.addEventListener('change', () => saveUserPrefs({ model: modelSelect.value }));
+}
+
+// Dark mode toggle
+const darkModeBtn = document.getElementById('darkModeBtn');
+if (darkModeBtn) {
+    const prefs = loadUserPrefs();
+    const isDark = prefs.darkMode === true;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    darkModeBtn.textContent = isDark ? '☀️' : '🌙';
+    darkModeBtn.title = isDark ? 'Light mode' : 'Dark mode';
+    darkModeBtn.addEventListener('click', () => {
+        const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const nextDark = !nowDark;
+        document.documentElement.setAttribute('data-theme', nextDark ? 'dark' : 'light');
+        darkModeBtn.textContent = nextDark ? '☀️' : '🌙';
+        darkModeBtn.title = nextDark ? 'Light mode' : 'Dark mode';
+        saveUserPrefs({ darkMode: nextDark });
+    });
+}
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
@@ -942,5 +1053,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSavedSongs();
     updateHeaderAuth();
     loadApiConfig();
+    const shareEncoded = params.get('share');
+    if (shareEncoded) {
+        try {
+            const b64 = shareEncoded.replace(/-/g, '+').replace(/_/g, '/');
+            const json = decodeURIComponent(escape(atob(b64)));
+            const { song, transposeSemitones } = JSON.parse(json);
+            if (song && song.progressions) {
+                history.replaceState({}, '', window.location.pathname);
+                displayChordChart(song, transposeSemitones ?? 0);
+                return;
+            }
+        } catch (e) {
+            console.warn('Invalid share link:', e);
+        }
+    }
     showWelcome();
 });

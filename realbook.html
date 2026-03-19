@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Genre Real Book — beethovan.ai</title>
+  <meta name="description" content="Searchable fake-book index: jazz, pop, rock, hip-hop, classical, K-pop, and more — AI lead sheets and cross-genre remix.">
+  <!-- Root-absolute assets so /realbook/ (trailing slash) still loads CSS/JS -->
+  <link rel="stylesheet" href="/realbook.css">
+</head>
+<body class="realbook-body">
+  <div class="rb-wrap">
+    <header class="rb-topbar">
+      <div class="rb-brand">Real Book · All Music</div>
+      <nav class="rb-nav">
+        <button type="button" id="rbThemeToggle" title="Toggle theme">🌙</button>
+        <a href="/">← Chord search</a>
+      </nav>
+    </header>
+
+    <!-- Index view -->
+    <div id="rbListView">
+      <p class="rb-sub">A curated multi-genre index — load AI “Real Book” lead sheets, improvise across styles, export PDFs, and grow the book.</p>
+
+      <div class="rb-any-block">
+        <h2>Infinite search (any song)</h2>
+        <p style="margin:0 0 0.75rem;font-size:0.9rem;color:var(--rb-muted);">Not in the table? Ask the AI to infer genre and build a full chart.</p>
+        <div class="rb-any-row">
+          <div style="flex:1;min-width:220px;">
+            <label class="rb-label" for="rbAnyQuery">Song / artist</label>
+            <input type="text" id="rbAnyQuery" class="rb-input" placeholder='e.g. "Running Up That Hill" Kate Bush' autocomplete="off">
+          </div>
+          <button type="button" class="rb-btn" id="rbAnyBtn">Generate chart</button>
+        </div>
+        <div id="rbAnyResult" style="display:none;margin-top:1rem;"></div>
+      </div>
+
+      <div class="rb-toolbar">
+        <div>
+          <label class="rb-label" for="rbSearch">Search index</label>
+          <input type="text" id="rbSearch" class="rb-input" placeholder="Filter by title or artist…" autocomplete="off">
+        </div>
+        <div>
+          <label class="rb-label" for="rbGenre">Genre</label>
+          <select id="rbGenre" class="rb-select">
+            <option value="">All genres</option>
+          </select>
+        </div>
+        <div>
+          <label class="rb-label">&nbsp;</label>
+          <button type="button" class="rb-btn secondary" id="rbClearFilters">Reset</button>
+        </div>
+      </div>
+
+      <p class="rb-count" id="rbCount"></p>
+      <div class="rb-table-wrap">
+        <table class="rb-table" aria-label="Real Book index">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Artist</th>
+              <th>Genre</th>
+              <th>Year</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rbTbody"></tbody>
+        </table>
+      </div>
+
+      <section class="rb-suggest">
+        <h2>Suggest a song</h2>
+        <p style="color:var(--rb-muted);font-size:0.95rem;margin-bottom:1rem;">We’ll ask the AI if it belongs in a multi-genre Real Book and store your submission.</p>
+        <div class="rb-form-grid">
+          <div>
+            <label class="rb-label" for="sgTitle">Title</label>
+            <input type="text" id="sgTitle" class="rb-input" required>
+          </div>
+          <div>
+            <label class="rb-label" for="sgArtist">Artist</label>
+            <input type="text" id="sgArtist" class="rb-input">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+            <div>
+              <label class="rb-label" for="sgGenre">Genre (optional)</label>
+              <input type="text" id="sgGenre" class="rb-input">
+            </div>
+            <div>
+              <label class="rb-label" for="sgYear">Year (optional)</label>
+              <input type="number" id="sgYear" class="rb-input" min="1000" max="2100">
+            </div>
+          </div>
+          <div>
+            <label class="rb-label" for="sgNote">Note (optional)</label>
+            <input type="text" id="sgNote" class="rb-input" placeholder="Why this tune?">
+          </div>
+          <button type="button" class="rb-btn" id="sgSubmit">Submit for review</button>
+        </div>
+        <div id="sgMsg"></div>
+      </section>
+    </div>
+
+    <!-- Detail view -->
+    <div id="rbDetailView" style="display:none;" class="rb-detail">
+      <div class="rb-detail-header">
+        <button type="button" class="rb-btn secondary" id="rbBack">← Index</button>
+        <h1 id="rbDetailTitle"></h1>
+        <p id="rbDetailMeta" class="rb-meta" style="color:var(--rb-muted);"></p>
+        <div class="rb-detail-actions">
+          <button type="button" class="rb-btn" id="rbLoadSheet">Load AI lead sheet</button>
+          <button type="button" class="rb-btn secondary" id="rbExportPdf" disabled>Export PDF</button>
+        </div>
+      </div>
+
+      <h3 class="rb-label" style="margin-bottom:0.5rem;">Lead sheet</h3>
+      <div id="rbLeadSheet" class="rb-sheet">— Click “Load AI lead sheet” —</div>
+
+      <h3 class="rb-label" style="margin-bottom:0.5rem;">Improv tips</h3>
+      <ul id="rbImprovList" class="rb-tips"></ul>
+
+      <div class="rb-remix-box">
+        <h2 style="font-size:1.1rem;margin:0 0 0.75rem;">Improv across genres</h2>
+        <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--rb-muted);">“Jazzify” a pop tune, simplify for folk, add pocket for hip-hop — side‑by‑side with your loaded chart.</p>
+        <div class="rb-remix-row">
+          <div style="flex:1;min-width:200px;">
+            <label class="rb-label" for="rbRemixTarget">Target genre</label>
+            <select id="rbRemixTarget" class="rb-select"></select>
+          </div>
+          <button type="button" class="rb-btn" id="rbRemixBtn" disabled>Regenerate chords</button>
+        </div>
+        <div class="rb-columns two" id="rbRemixColumns" style="display:none;margin-top:1rem;">
+          <div class="rb-col">
+            <h3>Original (loaded)</h3>
+            <div id="rbRemixOriginal" class="rb-sheet" style="min-height:160px;"></div>
+          </div>
+          <div class="rb-col">
+            <h3>Remixed</h3>
+            <div id="rbRemixNew" class="rb-sheet" style="min-height:160px;"></div>
+            <p id="rbWhy" style="font-size:0.88rem;color:var(--rb-muted);margin-top:0.5rem;"></p>
+            <ul id="rbVariations" class="rb-tips" style="margin-top:0.5rem;"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer style="margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rb-rule);font-size:0.85rem;color:var(--rb-muted);text-align:center;">
+      AI charts are generated for study and practice — verify against recordings. © beethovan.ai
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
+  <script src="/realbook.js"></script>
+</body>
+</html>

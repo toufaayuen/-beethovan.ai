@@ -1,0 +1,12 @@
+{
+  "name": "beethovan-ai",
+  "private": true,
+  "scripts": {
+    "dev": "cd server && npm run dev",
+    "dev:3009": "cd server && PORT=3009 npm run dev",
+    "start": "cd server && npm start"
+  },
+  "dependencies": {
+    "jspdf": "^2.5.2"
+  }
+}
